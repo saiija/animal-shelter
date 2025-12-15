@@ -1,10 +1,12 @@
 const sqlite3 = require("sqlite3").verbose();
 const db = new sqlite3.Database("./animals.db");
 
+// alustetaan tietokanta
 function initDatabase() {
   db.serialize(() => {
     console.log("Alustetaan tietokanta...");
 
+    // luodaan animals-taulu
     db.run(`
       CREATE TABLE IF NOT EXISTS animals (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -18,6 +20,7 @@ function initDatabase() {
       )
     `);
 
+    // luodaan adoptio-taulu
     db.run(`
       CREATE TABLE IF NOT EXISTS adoptions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -30,6 +33,7 @@ function initDatabase() {
       )
     `);
 
+      // tsekataan onko animals-taulussa jo dataa
     db.get("SELECT COUNT(*) AS count FROM animals", (err, row) => {
       if (err) {
         console.error("Tietokantavirhe:", err);
@@ -39,6 +43,7 @@ function initDatabase() {
       if (row.count === 0) {
         console.log("Lisätään testieläimet...");
 
+        // testidata
         const animals = [
           ["Mirri", "kissa", 3, "Maatiaiskissa", "Rauhallinen ja seurallinen. Tykkää nukkua auringossa.", "/images/kissa1.jpg", "available"],
           ["Rex", "koira", 1, "Whippet", "Reipas lenkkeilijä ja ihmisrakas. Osaa istua ja antaa tassua.", "/images/koira1.jpg", "available"],
