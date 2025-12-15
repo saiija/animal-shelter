@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vaasan Eläinsuoja ry</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background:#f4f4f4; }
+    h1 { margin-top: 0; }
+    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+    .card { background:white; border-radius:10px; padding:12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    .card img { width:100%; height:160px; object-fit:cover; border-radius:8px; }
+    .meta { color:#444; margin: 6px 0; }
+    button { padding: 8px 12px; border:0; border-radius:6px; cursor:pointer; background:#8400ff; color:white; }
+    button.secondary { background:#6c757d; }
+    button[disabled] { background:#999; cursor:not-allowed; }
+    .panel { margin-top: 16px; padding: 12px; background: white; border-radius:10px; box-shadow: 0 2px 6px rgba(0,0,0,0.08); }
+    label { display:block; margin-top: 10px; }
+    input, textarea { width:100%; padding:8px; margin-top:4px; }
+    .error { color:#b00020; margin-top: 10px; }
+    .ok { color:#1b7f2a; margin-top: 10px; }
+
+    .thankyou {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 10px;
+      background: #eaf7ee;
+      border: 1px solid #bfe6c9;
+      color: #1b7f2a;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <h1>Vaasan Eläinsuoja ry – Adoptoitavat eläimet</h1>
+
+  <div class="grid" id="list"></div>
+  <div class="panel" id="detail" style="display:none;"></div>
+
+  <script>
+    const listEl = document.getElementById("list");
+    const detailEl = document.getElementById("detail");
+
+    function esc(s){
+      return String(s ?? "")
+        .replaceAll("&","&amp;")
+        .replaceAll("<","&lt;")
+        .replaceAll(">","&gt;");
+    }
+
+    async function loadAnimals(keepDetail = false) {
+      const res = await fetch("/animals");
+      const animals = await res.json();
+
+      listEl.innerHTML = "";
+
+      if (!keepDetail) {
+        detailEl.style.display = "none";
+        detailEl.innerHTML = "";
+      }
+
+      animals.forEach(a => {
+        const adopted = a.status === "adopted";
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `
+          <img src="${esc(a.image_url)}" alt="Kuva eläimestä ${esc(a.name)}">
+          <h3>${esc(a.name)}</h3>
+          <div class="meta">Tyyppi: ${esc(a.type)} • Ikä: ${esc(a.age)}</div>
+          <div class="meta">Status: <b>${adopted ? "Adoptoitu" : "Vapaa"}</b></div>
+          <button ${adopted ? "disabled" : ""} onclick="showDetail(${a.id})">Katso lisää</button>
+        `;
+        listEl.appendChild(card);
+      });
+    }
+
+    async function showDetail(id) {
+      const res = await fetch(`/animals/${id}`);
+      if (!res.ok) {
+        alert("Eläintä ei löytynyt.");
+        return;
+      }
+      const a = await res.json();
+      const adopted = a.status === "adopted";
+
+      detailEl.style.display = "block";
+      detailEl.innerHTML = `
+        <h2>${esc(a.name)} (${esc(a.type)})</h2>
+        <img src="${esc(a.image_url)}" alt="Kuva eläimestä ${esc(a.name)}" style="max-width:420px;width:100%;border-radius:8px;">
+        <p><b>Ikä:</b> ${esc(a.age)}</p>
+        <p><b>Rotu:</b> ${esc(a.breed)}</p>
+        <p><b>Kuvaus:</b> ${esc(a.description)}</p>
+        <p><b>Status:</b> ${adopted ? "Adoptoitu" : "Vapaa"}</p>
+
+        <h3>Adoptiohakemus</h3>
+
+        <div id="thankyouArea"></div>
+
+        <form id="adoptForm" ${adopted ? 'style="display:none;"' : ""}>
+          <label>Nimi* <input name="name" required></label>
+          <label>Sähköposti* <input name="email" type="email" required></label>
+          <label>Puhelin <input name="phone"></label>
+          <label>Viesti <textarea name="message" rows="4"></textarea></label>
+          <button type="submit">Adoptoi minut</button>
+          <button type="button" class="secondary" onclick="closeDetail()">Sulje</button>
+          <div class="error" id="err"></div>
+        </form>
+
+        ${adopted ? `<div class="thankyou">Tämä eläin on jo adoptoitu.</div>` : ""}
+      `;
+
+      const form = document.getElementById("adoptForm");
+      const err = document.getElementById("err");
+      const thankyouArea = document.getElementById("thankyouArea");
+
+      if (form) {
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          err.textContent = "";
+
+          const payload = Object.fromEntries(new FormData(form).entries());
+
+          const resp = await fetch(`/animals/${a.id}/adopt`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+
+          const data = await resp.json();
+
+          if (!resp.ok) {
+            err.textContent = data.error || "Virhe adoptiossa";
+            return;
+          }
+
+          thankyouArea.innerHTML = `
+            <div class="thankyou">
+              Kiitos! Hakemuksesi vastaanotettiin.<br>
+            </div>
+          `;
+
+          form.style.display = "none";
+
+          await loadAnimals(true);
+        });
+      }
+
+      detailEl.scrollIntoView({ behavior: "smooth" });
+    }
+
+    function closeDetail() {
+      detailEl.style.display = "none";
+      detailEl.innerHTML = "";
+    }
+
+    loadAnimals();
+    window.showDetail = showDetail;
+    window.closeDetail = closeDetail;
+  </script>
+</body>
+</html>
